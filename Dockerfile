@@ -1,10 +1,12 @@
-#Dockerfile, Image, Container
-FROM python:3.8
+FROM jupyter/datascience-notebook
 
 COPY requirements.txt ./
-RUN pip install -U pip requirements.txt
+RUN pip install -U pip
 RUN pip install --no-cache-dir -r requirements.txt
 
-ADD main.py .
+ENV JUPYTER_ENABLE_LAB=yes
 
-CMD [ "python", "./main.py"]
+COPY --chown=${NB_UID}:${NB_GID} . /home/jovyan/work
+WORKDIR /home/jovyan/work
+
+CMD ["jupyter", "lab", "--ip=0.0.0.0", "--port=8888", "--no-browser", "--notebook-dir=/home/jovyan/work", "--allow-root"]
