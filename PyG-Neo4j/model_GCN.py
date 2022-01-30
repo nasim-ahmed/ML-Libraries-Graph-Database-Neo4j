@@ -24,7 +24,7 @@ class GCN(torch.nn.Module):
 
 
 def train_gcn(train_data):
-    epochs = 200
+    epochs = 1000
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model = GCN(train_data).to(device)
 
