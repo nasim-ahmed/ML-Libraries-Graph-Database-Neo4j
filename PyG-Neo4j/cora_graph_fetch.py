@@ -122,8 +122,6 @@ def main():
 
     plot_train_loss(gat_train_loss, gcn_train_loss)
 
-    
-
 
 
 if __name__ == "__main__":

@@ -81,5 +81,3 @@ def train_gnn(train_data):
     print('Accuracy: {:.4f}'.format(acc))
 
     return losses, images 
-
-    
