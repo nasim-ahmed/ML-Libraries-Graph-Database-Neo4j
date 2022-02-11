@@ -26,3 +26,4 @@ get_stroke_boolean_query: "
    MATCH (s:Stroke)-[r:HAS_STROKE]->(p:Patient) 
    RETURN id(s) AS sId, p.patientId AS patientId, r.value AS strokeVal
 "
+

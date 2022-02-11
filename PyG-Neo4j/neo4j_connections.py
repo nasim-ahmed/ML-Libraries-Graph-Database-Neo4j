@@ -3,12 +3,8 @@ import pandas as pd
 import yaml
 import sys
 import torch
-from SequenceEncoder import SequenceEncoder
-from CategoryEncoder import CategoryEncoder
-from IdentityEncoder import IdentityEncoder
 import torch_geometric.transforms as T
 from torch_geometric.nn import SAGEConv, to_hetero
-
 from torch_geometric.data import HeteroData
 from torch_geometric.transforms import ToUndirected, RandomLinkSplit
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -132,7 +128,7 @@ def main():
     data['str', 'hasStr', 'pat'].edge_label = edge_label
     data.to(device, non_blocking=True)
     
-
+    
 
     data = ToUndirected()(data)
     
@@ -148,13 +144,6 @@ def main():
     )
     train_data, val_data, test_data = transform(data)
    
-    
-    
-    
-    
-
-
-
 
 
 if __name__ == "__main__":
