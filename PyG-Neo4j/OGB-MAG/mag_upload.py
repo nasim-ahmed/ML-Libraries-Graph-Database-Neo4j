@@ -6,7 +6,11 @@ from enum import Enum
 import sys
 sys.path.append('../')
 from neo4j_connections import Neo4jConnection
-import logging
+import coloredlogs, logging
+
+
+mylogs = logging.getLogger(__name__)
+
 
 class NodeType(Enum):
     PAPER = "paper"
@@ -16,10 +20,13 @@ class NodeType(Enum):
 
 
 class Mag_Loader():
-    def __init__(self, node_paths, paper_feature_paths, edge_paths):
+    def __init__(self, node_paths, paper_feature_paths, edge_paths, paper_label_paths, venue_paths):
         self.node_paths = node_paths
         self.paper_feature_paths = paper_feature_paths
         self.edge_paths = edge_paths
+        self.paper_label_paths = paper_label_paths
+        self.venue_paths = venue_paths
+
 
 
     def create_csv(self, path):
@@ -32,6 +39,19 @@ class Mag_Loader():
         feature_df = pd.read_csv(self.paper_feature_paths[1], header=None)
         df["feature"] = feature_df.values.tolist()
         return df
+
+    def create_node_label(self):
+        col_names = ["label"]
+        label_df = pd.read_csv(self.paper_label_paths[0], header=None, names = col_names)
+        label_df.insert(0, "id", range(0, len(label_df)))
+        return label_df
+
+
+    def create_venue_label(self):
+        venue_df = self.create_csv(self.venue_paths[0])
+        venue_df.rename(columns={'label idx': 'label', 'venue name': 'name'}, inplace=True)
+        return venue_df 
+
 
     def create_node_list(self):
         df_list = []
@@ -61,6 +81,30 @@ def load_config(configuration):
     with open(configuration) as config_file: 
         config = yaml.load(config_file, Loader = yaml.FullLoader)
 
+
+def upload_node_label(node_list):
+
+    load_papers_label_query = """
+    UNWIND $node_list as node
+    MATCH (n:paper {id: toInteger(node.id)})
+    SET n.label = node.label
+    """
+
+    connection = Neo4jConnection(config)
+    batch_loading(connection, node_list, load_papers_label_query)
+
+def upload_venue(node_list):
+    load_papers_venue_query = """
+    UNWIND $node_list as node
+    MATCH (n:paper {label: toInteger(node.label)})
+    SET n.venue = node.name
+    """
+
+    connection = Neo4jConnection(config)
+    batch_loading(connection, node_list, load_papers_venue_query)
+
+
+
 def upload_nodes(df_list):
     #Create papers nodes
     create_nodes_neo4j(df_list[0], NodeType.PAPER.value)
@@ -81,16 +125,16 @@ def upload_nodes(df_list):
 
 def upload_edges(edge_list):
     #Create papers cites paper edges
-    create_edge_list(edge_list[0], NodeType.PAPER.value)
-    logging.info('Papers cites paperhas been loaded to Database')
+    # create_edge_list(edge_list[0], NodeType.PAPER.value)
+    # logging.info('Papers cites paperhas been loaded to Database')
 
-    #Create papers has topic field of study
-    create_edge_list(edge_list[1], NodeType.FIELD_OF_STUDY.value)
-    logging.info('Papers has topic field of study has been loaded to Database')
+    # #Create papers has topic field of study
+    # create_edge_list(edge_list[1], NodeType.FIELD_OF_STUDY.value)
+    # logging.info('Papers has topic field of study has been loaded to Database')
 
-    #Create author writes paper
-    create_edge_list(edge_list[2], NodeType.AUTHOR.value)
-    logging.info('Author writes paper loaded to Database')
+    # #Create author writes paper
+    # create_edge_list(edge_list[2], NodeType.AUTHOR.value)
+    # logging.info('Author writes paper loaded to Database')
 
     #Create author affiliated with institution
     create_edge_list(edge_list[3], NodeType.INSTITUTION.value)
@@ -116,17 +160,35 @@ def main():
     '../dataset/mag/raw/relations/author___affiliated_with___institution/edge.csv'
     ]
 
+    paper_label_paths = [
+        '../dataset/mag/raw/node-label/paper/node-label.csv'
+    ]
 
-    loader = Mag_Loader(node_paths, paper_feature_paths, edge_paths)
-    df_list = loader.create_node_list()
-    logging.info('Dataframe list has been populated')
+    venue_name_paths = [
+        '../dataset/mag/mapping/labelidx2venuename.csv'
+    ]
+
+
+    coloredlogs.install(level=logging.DEBUG, logger=mylogs)
+
+
+    loader = Mag_Loader(node_paths, paper_feature_paths, edge_paths, paper_label_paths, venue_name_paths)
+    #df_list = loader.create_node_list()
+    #df_label = loader.create_node_label()
+    #df_venue = loader.create_venue_label()
+    #upload_node_label(df_label)
+    #upload_venue(df_venue)
     
+    
+    mylogs.info("Graph db has been updated")
+
+
     #upload nodes to Neo4j
     #upload_nodes(df_list)
 
     #upload relationships
-    edge_list = loader.create_edge_list()
-    upload_edges(edge_list)
+    #edge_list = loader.create_edge_list()
+    #upload_edges(edge_list)
     
     
 
@@ -156,7 +218,7 @@ def create_edge_list(edge_list, node_type = NodeType.PAPER.value):
     author_affiliatedwith_institution_query = """
     UNWIND $edge_list as edge
     MATCH (source: author{id: toInteger(edge.source)})
-    MATCH (target: paper{id: toInteger(edge.target)}) 
+    MATCH (target: institution{id: toInteger(edge.target)}) 
     MERGE (source)-[r:affiliated_with]->(target)
     """
 

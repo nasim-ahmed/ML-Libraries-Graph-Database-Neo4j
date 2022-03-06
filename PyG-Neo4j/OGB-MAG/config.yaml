@@ -1,0 +1,29 @@
+server_uri: "bolt://localhost:11003/"
+admin_user: "neo4j"
+admin_pass: "123456"
+
+
+graph_create_gds: "CALL gds.graph.create('patients', ['Patient', 'HeartDisease'],
+  {HAS_HEARTDISEASE: {orientation:'UNDIRECTED'}})"
+
+graph_node2vec_write: "
+CALL gds.alpha.node2vec.write('patients', {writeProperty: 'embedding', embeddingDimension: 10})
+"
+
+get_stroke_query: "
+   MATCH (s:Stroke) RETURN id(s) AS sId
+"
+
+get_patients_query: "
+  MATCH (p:Patient)-[:RESIDENCE_TYPE] -> (rt: ResidenceType) 
+  WITH p, collect(rt.residence_type) AS rt_list
+
+  RETURN p.patientId AS patientId, p.gender AS gender, 
+  apoc.text.join(rt_list, '|') AS rts, p.embedding AS embedding
+"
+
+get_stroke_boolean_query: "
+   MATCH (s:Stroke)-[r:HAS_STROKE]->(p:Patient) 
+   RETURN id(s) AS sId, p.patientId AS patientId, r.value AS strokeVal
+"
+
