@@ -41,13 +41,21 @@ class GraphFetcher(object):
         MATCH (p:patientunitstay) -[:HAS_DIAGNOSIS] -> (d: diagnosis)
         WHERE d.patientunitstayid IN $col_one_list AND d.diagnosisoffset < 1440
         return d.patientunitstayid AS patientunitstayid, d.diagnosisstring AS diagnosisstring
+        UNION
+        MATCH (p:patientunitstay) -[:HAS_PASTHISTORY] -> (ph: pasthistory)
+        WHERE ph.patientunitstayid IN $col_one_list AND ph.pasthistoryoffset < 1440
+        return ph.patientunitstayid AS patientunitstayid, ph.pasthistorypath AS diagnosisstring
+        UNION
+        MATCH (p:patientunitstay) -[:HAS_ADMISSION] -> (ad: admissiondx)
+        WHERE ad.patientunitstayid IN $col_one_list AND ad.admitdxenteredoffset < 1440
+        return ad.patientunitstayid AS patientunitstayid, ad.admitdxpath AS diagnosisstring
         '''
 
         result = connection.query(query, {"col_one_list": col_one_list})
+        print(result)
         print(result['patientunitstayid'].nunique())
 
 
-       
 
 
 def main():
@@ -59,8 +67,6 @@ def main():
     '''Fetch the labels table'''
     #graphFetcher.fetch_labels(connection)
     graphFetcher.fetch_diagnosis(connection)
-    
-
     
 
 if __name__ == "__main__":
