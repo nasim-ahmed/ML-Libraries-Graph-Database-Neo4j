@@ -51,11 +51,9 @@ class GraphFetcher(object):
         return ad.patientunitstayid AS patientunitstayid, ad.admitdxpath AS diagnosisstring
         '''
 
-        result = connection.query(query, {"col_one_list": col_one_list})
-        print(result)
-        print(result['patientunitstayid'].nunique())
-
-
+        diagnosis_df = connection.query(query, {"col_one_list": col_one_list})
+        diagnosis_df.to_csv (r'diagnosis.csv', index = False, header=True)
+        
 
 
 def main():
