@@ -53,6 +53,10 @@ class GraphFetcher(object):
 
         diagnosis_df = connection.query(query, {"col_one_list": col_one_list})
         diagnosis_df.to_csv (r'diagnosis.csv', index = False, header=True)
+
+    def flat_features(self, connection):
+        df = pd.read_csv('labels.csv')
+        print(df)
         
 
 
@@ -64,8 +68,9 @@ def main():
 
     '''Fetch the labels table'''
     #graphFetcher.fetch_labels(connection)
-    graphFetcher.fetch_diagnosis(connection)
-    
+    # graphFetcher.fetch_diagnosis(connection)
+    graphFetcher.flat_features(connection)
+
 
 if __name__ == "__main__":
     main()
