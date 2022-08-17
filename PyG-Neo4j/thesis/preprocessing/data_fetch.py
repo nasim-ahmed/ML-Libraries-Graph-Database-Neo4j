@@ -58,7 +58,7 @@ class GraphFetcher(object):
         diagnosis_df.to_csv (r'{}diagnoses.csv'.format(self.eICU_path), index = False, header=True)
 
     def flat_features(self, connection):
-        df = pd.read_csv('../../../PyG-Neo4j/dataset/eicudata/labels.csv')
+        df = pd.read_csv('{}labels.csv'.format(self.eICU_path))
         col_one_list = df['patientunitstayid'].tolist()
 
         query = '''
@@ -66,16 +66,15 @@ class GraphFetcher(object):
         MATCH (p:patientunitstay) -[:HAS_RESULT] -> (apr: apachepatientresult)
         MATCH (pat: patient)-[:HAS_STAY] -> (p:patientunitstay)
         WHERE p.patientunitstayid IN $col_one_list
-        return distinct p.patientunitstayid AS patientunitstayid, pat.gender AS gender, pat.age AS age, pat.ethnicity AS ethnicity, p.admissionheight AS admissionheight, p.admissionweight AS admissionweight,
+        return distinct p.patientunitstayid AS patientunitstayid, pat.uniquepid AS uniquepid, pat.gender AS gender, pat.age AS age, pat.ethnicity AS ethnicity, p.admissionheight AS admissionheight, p.admissionweight AS admissionweight,
         p.apacheadmissiondx AS apacheadmissiondx, substring(p.unitadmittime24, 0,2) as hr, p.unittype AS unittype, p.unitadmitsource AS unitadmitsource, p.unitstaytype AS unitstaytype, apr.physicianspeciality AS physicianspeciality, aps.intubated AS intubated, aps.vent AS vent, aps.dialysis AS dialysis, aps.eyes AS eyes,
         aps.motor AS motor, aps.verbal AS verbal, aps.meds AS meds
         '''
 
         flat_features_df = connection.query(query, {"col_one_list": col_one_list})
-        flat_features_df.to_csv (r'../../../PyG-Neo4j/dataset/eicudata/flat_features.csv', index = False, header=True)
+        flat_features_df.to_csv (r'{}flat_features.csv'.format(self.eICU_path), index = False, header=True)
 
         
-
 
 def main():
     with open('paths.json', 'r') as f:
@@ -89,8 +88,8 @@ def main():
 
     '''Fetch the labels table'''
     #graphFetcher.fetch_labels(connection)
-    graphFetcher.fetch_diagnosis(connection)
-    #graphFetcher.flat_features(connection)
+    #graphFetcher.fetch_diagnosis(connection)
+    graphFetcher.flat_features(connection)
 
 
 if __name__ == "__main__":
