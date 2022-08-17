@@ -1,10 +1,12 @@
 from neo4j_connections import Neo4jConnection
 import yaml
 import pandas as pd 
+import json
 
 class GraphFetcher(object):
-    def __init__(self, configuration):
+    def __init__(self, configuration, eICU_path):
         self.configuration = configuration 
+        self.eICU_path = eICU_path
 
     def load_config(self):
         global config
@@ -14,7 +16,7 @@ class GraphFetcher(object):
     def fetch_labels(self, connection): 
         query = '''
             call {
-                match(p:patientunitstay)-[:HAS_RESULT]->(apr:apachepatientresult)
+                match (pa: patient)-[:HAS_STAY]->(p:patientunitstay)-[:HAS_RESULT]->(apr:apachepatientresult)
                 where apr.apacheversion = 'IVa' and apr.actualiculos >= 1
                 with p.uniquepid as uniquepid, min(p.patienthealthsystemstayid) as patienthealthsystemstayid
                 match(p:patientunitstay) 
@@ -22,16 +24,17 @@ class GraphFetcher(object):
                 with p.uniquepid as uniquepid, patienthealthsystemstayid, min(p.unitvisitnumber) as unitvisitnumber
                 return  patienthealthsystemstayid, unitvisitnumber
             }
-            match(p:patientunitstay)-[:HAS_RESULT]->(apr:apachepatientresult)
+            match (pa: patient)-[:HAS_STAY]->(p:patientunitstay)-[:HAS_RESULT]->(apr:apachepatientresult)
             where apr.apacheversion = 'IVa' and apr.actualiculos >= 1
             and p.patienthealthsystemstayid = patienthealthsystemstayid
             and p.unitvisitnumber = unitvisitnumber
-            return p.patientunitstayid AS patientunitstayid, apr.predictedhospitalmortality AS predictedhospitalmortality,
+            return pa.uniquepid AS uniquepid, p.patientunitstayid AS patientunitstayid, apr.predictedhospitalmortality AS predictedhospitalmortality,
             apr.actualhospitalmortality AS actualhospitalmortality, apr.predictediculos AS predictediculos, apr.actualiculos AS actualiculos 
         '''
 
         labels_df = connection.query(query)
-        labels_df.to_csv (r'labels.csv', index = False, header=True)
+        #labels_df.to_csv (r'../../../PyG-Neo4j/dataset/eicudata/labels.csv', index = False, header=True)
+        labels_df.to_csv(r'{}labels.csv'.format(self.eICU_path), index=False, header=True)
 
 
     def fetch_diagnosis(self, connection): 
@@ -75,15 +78,21 @@ class GraphFetcher(object):
 
 
 def main():
+    with open('paths.json', 'r') as f:
+        eICU_path = json.load(f)["eICU_path"]
+
     configure = 'config.yaml'
-    graphFetcher = GraphFetcher(configure)
+    graphFetcher = GraphFetcher(configure, eICU_path)
     graphFetcher.load_config()
     connection = Neo4jConnection(config)
 
+
+    
+
     '''Fetch the labels table'''
-    #graphFetcher.fetch_labels(connection)
-    # graphFetcher.fetch_diagnosis(connection)
-    graphFetcher.flat_features(connection)
+    graphFetcher.fetch_labels(connection)
+    #graphFetcher.fetch_diagnosis(connection)
+    #graphFetcher.flat_features(connection)
 
 
 if __name__ == "__main__":
