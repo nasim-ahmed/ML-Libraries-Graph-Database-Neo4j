@@ -38,24 +38,24 @@ class GraphFetcher(object):
 
 
     def fetch_diagnosis(self, connection): 
-        df = pd.read_csv('labels.csv')
+        df = pd.read_csv('{}labels.csv'.format(self.eICU_path))
         col_one_list = df['patientunitstayid'].tolist()
         query = '''
-        MATCH (p:patientunitstay) -[:HAS_DIAGNOSIS] -> (d: diagnosis)
-        WHERE d.patientunitstayid IN $col_one_list AND d.diagnosisoffset < 1440
-        return d.patientunitstayid AS patientunitstayid, d.diagnosisstring AS diagnosisstring
+        MATCH (pa: patient)-[:HAS_STAY]-> (p:patientunitstay) -[:HAS_DIAGNOSIS] -> (d: diagnosis)
+        WHERE d.patientunitstayid IN $col_one_list AND d.diagnosisoffset < 1440 AND pa.uniquepid = p.uniquepid AND d.patientunitstayid = p.patientunitstayid
+        return pa.uniquepid AS uniquepid, d.patientunitstayid AS patientunitstayid, d.diagnosisstring AS diagnosisstring
         UNION
-        MATCH (p:patientunitstay) -[:HAS_PASTHISTORY] -> (ph: pasthistory)
-        WHERE ph.patientunitstayid IN $col_one_list AND ph.pasthistoryoffset < 1440
-        return ph.patientunitstayid AS patientunitstayid, ph.pasthistorypath AS diagnosisstring
+        MATCH (pa: patient)-[:HAS_STAY]-> (p:patientunitstay) -[:HAS_PASTHISTORY] -> (ph: pasthistory)
+        WHERE ph.patientunitstayid IN $col_one_list AND ph.pasthistoryoffset < 1440 AND pa.uniquepid = p.uniquepid AND ph.patientunitstayid = p.patientunitstayid
+        return pa.uniquepid AS uniquepid, ph.patientunitstayid AS patientunitstayid, ph.pasthistorypath AS diagnosisstring
         UNION
-        MATCH (p:patientunitstay) -[:HAS_ADMISSION] -> (ad: admissiondx)
-        WHERE ad.patientunitstayid IN $col_one_list AND ad.admitdxenteredoffset < 1440
-        return ad.patientunitstayid AS patientunitstayid, ad.admitdxpath AS diagnosisstring
+        MATCH (pa: patient)-[:HAS_STAY]-> (p:patientunitstay) -[:HAS_ADMISSION] -> (ad: admissiondx)
+        WHERE ad.patientunitstayid IN $col_one_list AND ad.admitdxenteredoffset < 1440 AND pa.uniquepid = p.uniquepid AND ad.patientunitstayid = p.patientunitstayid
+        return pa.uniquepid AS uniquepid, ad.patientunitstayid AS patientunitstayid, ad.admitdxpath AS diagnosisstring
         '''
 
         diagnosis_df = connection.query(query, {"col_one_list": col_one_list})
-        diagnosis_df.to_csv (r'diagnosis.csv', index = False, header=True)
+        diagnosis_df.to_csv (r'{}diagnoses.csv'.format(self.eICU_path), index = False, header=True)
 
     def flat_features(self, connection):
         df = pd.read_csv('../../../PyG-Neo4j/dataset/eicudata/labels.csv')
@@ -87,11 +87,9 @@ def main():
     connection = Neo4jConnection(config)
 
 
-    
-
     '''Fetch the labels table'''
-    graphFetcher.fetch_labels(connection)
-    #graphFetcher.fetch_diagnosis(connection)
+    #graphFetcher.fetch_labels(connection)
+    graphFetcher.fetch_diagnosis(connection)
     #graphFetcher.flat_features(connection)
 
 
