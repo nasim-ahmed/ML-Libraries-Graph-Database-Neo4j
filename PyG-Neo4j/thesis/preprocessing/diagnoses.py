@@ -49,7 +49,7 @@ def add_codes(splits, codes_dict, words_dict, count):
             codes.append(count)
             words_dict[count] = splits[0] + '|' + splits[1] + '|' + splits[2] + '|' + splits[3] + '|' + splits[4]
             count += 1
-    if levels is 6:
+    if levels == 6:
         try:
             codes.append(codes_dict[splits[0]][1][splits[1]][1][splits[2]][1][splits[3]][1][splits[4]][1][splits[5]][0])
             codes_dict[splits[0]][1][splits[1]][1][splits[2]][1][splits[3]][1][splits[4]][1][splits[5]][2] += 1
@@ -106,7 +106,7 @@ def find_pointless_codes(diag_dict):
     pointless_codes = []
     for key, value in diag_dict.items():
         # if there is only one child, then the branch is linear and can be condensed
-        if value[2] is 1:
+        if value[2] == 1:
             pointless_codes.append(value[0])
         # get rid of repeat copies where the parent and child are the same title
         for next_key, next_value in value[1].items():
@@ -122,7 +122,6 @@ def find_rare_codes(cut_off, sparse_df):
     return list(rare_codes)
 
 def add_adm_diag(sparse_df, eICU_path, cut_off):
-
     print('==> Adding admission diagnoses from flat_features.csv...')
     flat = pd.read_csv(eICU_path + 'flat_features.csv')
     adm_diag = flat[['patientunitstayid', 'apacheadmissiondx']]
@@ -144,30 +143,36 @@ def add_adm_diag(sparse_df, eICU_path, cut_off):
     return all_diag
 
 def diagnoses_main(eICU_path, cut_off_prevalence):
-
     print('==> Loading data diagnoses.csv...')
-    diagnoses = pd.read_csv(eICU_path + 'diagnosis.csv')
+    diagnoses = pd.read_csv(eICU_path + 'diagnoses.csv')
+    dia_dropped = diagnoses.drop('diagnosisstring', axis=1)
+   
     diagnoses.set_index('patientunitstayid', inplace=True)
 
     unique_diagnoses = diagnoses.diagnosisstring.unique()
     codes_dict, mapping_dict, count, words_dict = get_mapping_dict(unique_diagnoses)
 
     patients = diagnoses.index.unique()
+    uniquepid = diagnoses['uniquepid'].unique()
     index_to_patients = dict(enumerate(patients))
     patients_to_index = {v: k for k, v in index_to_patients.items()}
 
     # reconfiguring the diagnosis data into a dictionary
-    diagnoses = diagnoses.groupby('patientunitstayid').apply(lambda diag: diag.to_dict(orient='list')['diagnosisstring']).to_dict()
+    diagnoses = diagnoses.groupby(['patientunitstayid', 'uniquepid']).apply(lambda diag: diag.to_dict(orient='list')['diagnosisstring']).to_dict()
     diagnoses = {patient: [code for diag in list_diag for code in mapping_dict[diag]] for (patient, list_diag) in diagnoses.items()}
 
     num_patients = len(patients)
     sparse_diagnoses = np.zeros(shape=(num_patients, count))
+    
+    new_list = []
     for patient, codes in diagnoses.items():
-        sparse_diagnoses[patients_to_index[patient], codes] = 1  # N.B. it doesn't matter that codes contains repeats here
-
+        new_list.append(patient[1])
+        sparse_diagnoses[patients_to_index[patient[0]], codes] = 1  # N.B. it doesn't matter that codes contains repeats here
+    
     pointless_codes = find_pointless_codes(codes_dict)
 
     sparse_df = pd.DataFrame(sparse_diagnoses, index=patients, columns=range(count))
+    #sparse_df.insert(0, 'uniquepid', new_list)
     cut_off = round(cut_off_prevalence*num_patients)
     rare_codes = find_rare_codes(cut_off, sparse_df)
     sparse_df.drop(columns=rare_codes + pointless_codes, inplace=True)
@@ -176,7 +181,26 @@ def diagnoses_main(eICU_path, cut_off_prevalence):
     print('==> Keeping ' + str(sparse_df.shape[1]) + ' diagnoses which have a prevalence of more than ' + str(cut_off_prevalence*100) + '%...')
 
     # make naming consistent with the other tables
-    sparse_df.rename_axis('patient', inplace=True)
+    # sparse_df.rename_axis('patient', inplace=True)
+
+    sparse_df = sparse_df.reset_index(drop=True)
+
+    new_list = []
+    flat_df = pd.read_csv(eICU_path + 'flat_features.csv')
+
+    for index, row in sparse_df.iterrows():
+        rowValue = row['patientunitstayid'].astype(int)
+        
+        if rowValue is not None:
+            if rowValue in dia_dropped['patientunitstayid'].values:
+                uniqueid = dia_dropped.loc[dia_dropped['patientunitstayid'] == rowValue, 'uniquepid'].iloc[0]
+                new_list.append(uniqueid)
+            else: 
+                if rowValue in flat_df['patientunitstayid'].values:
+                    upid = flat_df.loc[flat_df['patientunitstayid'] == rowValue, 'uniquepid'].iloc[0]
+                    new_list.append(upid)
+    
+    sparse_df.insert(0, 'uniquepid', new_list)
 
     print('==> Saving finalised preprocessed diagnoses...')
     sparse_df.to_csv(eICU_path + 'preprocessed_diagnoses.csv')
@@ -184,6 +208,7 @@ def diagnoses_main(eICU_path, cut_off_prevalence):
     return
 
 if __name__=='__main__':
-    eICU_path = '../../../PyG-Neo4j/dataset/eicudata/'
+
+    eICU_path = '/media/nasim/31c299f0-f952-4032-9bd8-001b141183e0/ML-Libraries-Graph-Database-Neo4j/PyG-Neo4j/app/eICU_data/'
     cut_off_prevalence = 0.001  # this would be 0.1%
     diagnoses_main(eICU_path, cut_off_prevalence)

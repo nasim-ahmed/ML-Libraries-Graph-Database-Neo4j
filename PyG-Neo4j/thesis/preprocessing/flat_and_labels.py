@@ -2,7 +2,6 @@ import pandas as pd
 
 
 def preprocess_flat(flat):
-
     # make naming consistent with the other tables
     flat.rename(columns={'patientunitstayid': 'patient'}, inplace=True)
     flat.set_index('patient', inplace=True)
@@ -49,11 +48,9 @@ def preprocess_labels(labels):
     labels.set_index('patient', inplace=True)
 
     labels['actualhospitalmortality'].replace({'EXPIRED': 1, 'ALIVE': 0}, inplace=True)
-
     return labels
 
 def flat_and_labels_main(eICU_path):
-
     print('==> Loading data from labels and flat features files...')
     flat = pd.read_csv(eICU_path + 'flat_features.csv')
     flat = preprocess_flat(flat)
@@ -66,5 +63,5 @@ def flat_and_labels_main(eICU_path):
     return
 
 if __name__=='__main__':
-    eICU_path = '../../../PyG-Neo4j/dataset/eicudata/'
+    eICU_path = '/media/nasim/31c299f0-f952-4032-9bd8-001b141183e0/ML-Libraries-Graph-Database-Neo4j/PyG-Neo4j/app/eICU_data'
     flat_and_labels_main(eICU_path)

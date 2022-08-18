@@ -74,7 +74,24 @@ class GraphFetcher(object):
         flat_features_df = connection.query(query, {"col_one_list": col_one_list})
         flat_features_df.to_csv (r'{}flat_features.csv'.format(self.eICU_path), index = False, header=True)
 
-        
+    def commonLabs(self, connection):
+        df = pd.read_csv('{}labels.csv'.format(self.eICU_path))
+        col_one_list = df['patientunitstayid'].tolist()
+
+        query = '''
+        MATCH (p:patientunitstay) - [r:HAS_LAB] -> (l:lab)
+        WHERE r.labresultoffset >= -1440 AND r.labresultoffset <= 1440
+        WITH l.labname AS labname, count(r) AS count, r
+        WHERE p.patientunitstayid IN $col_one_list
+        RETURN labname, count
+        ORDER BY count DESC;
+        '''
+
+        commonlabs_df = connection.query(query, {"col_one_list": col_one_list})
+        print(commonlabs_df)
+
+
+   
 
 def main():
     with open('paths.json', 'r') as f:
@@ -89,7 +106,8 @@ def main():
     '''Fetch the labels table'''
     #graphFetcher.fetch_labels(connection)
     #graphFetcher.fetch_diagnosis(connection)
-    graphFetcher.flat_features(connection)
+    #graphFetcher.flat_features(connection)
+    graphFetcher.commonLabs(connection)
 
 
 if __name__ == "__main__":

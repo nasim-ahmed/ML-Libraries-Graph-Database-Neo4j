@@ -31,11 +31,11 @@ def split_train_test(eICU_path, is_test=True, seed=9, cleanup=True):
     train, val = train_test_split(train, test_size=0.15/0.85, random_state=seed)
 
     print('==> Loading data for splitting...')
-    # if is_test:
-    #     timeseries = pd.read_csv(eICU_path + 'preprocessed_timeseries.csv', nrows=999999)
-    # else:
-    #     timeseries = pd.read_csv(eICU_path + 'preprocessed_timeseries.csv')
-    # timeseries.set_index('patient', inplace=True)
+    if is_test:
+        timeseries = pd.read_csv(eICU_path + 'preprocessed_timeseries.csv', nrows=999999)
+    else:
+        timeseries = pd.read_csv(eICU_path + 'preprocessed_timeseries.csv')
+    timeseries.set_index('patient', inplace=True)
     diagnoses = pd.read_csv(eICU_path + 'preprocessed_diagnoses.csv')
     diagnoses.set_index('patient', inplace=True)
     flat_features = pd.read_csv(eICU_path + 'preprocessed_flat.csv')
@@ -44,6 +44,7 @@ def split_train_test(eICU_path, is_test=True, seed=9, cleanup=True):
     # delete the source files, as they won't be needed anymore
     if is_test is False and cleanup:
         print('==> Removing the unsorted data...')
+        os.remove(eICU_path + 'preprocessed_timeseries.csv')
         os.remove(eICU_path + 'preprocessed_diagnoses.csv')
         os.remove(eICU_path + 'preprocessed_labels.csv')
         os.remove(eICU_path + 'preprocessed_flat.csv')
@@ -54,8 +55,8 @@ def split_train_test(eICU_path, is_test=True, seed=9, cleanup=True):
         folder_path = create_folder(eICU_path, partition_name)
         stays = shuffle_stays(stays, seed=9)
         with open(folder_path + '/stays.txt', 'w') as f:
-            for table_name, table in zip(['labels', 'flat', 'diagnoses'],
-                                         [labels, flat_features, diagnoses]):
+            for table_name, table in zip(['labels', 'flat', 'diagnoses', 'timeseries'],
+                                         [labels, flat_features, diagnoses, timeseries]):
                 table = process_table(table_name, table, stays, folder_path)
                 for stay in table.index:
                     f.write("%s\n" % stay)
@@ -63,7 +64,7 @@ def split_train_test(eICU_path, is_test=True, seed=9, cleanup=True):
     return
 
 if __name__=='__main__':
-    eICU_path = '../../../PyG-Neo4j/dataset/eicudata/'
+    from run_all_preprocessing import eICU_path
     parser = argparse.ArgumentParser()
     parser.add_argument('--cleanup', action='store_true')
     args = parser.parse_args()
