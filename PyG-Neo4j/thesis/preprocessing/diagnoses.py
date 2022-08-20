@@ -208,7 +208,6 @@ def diagnoses_main(eICU_path, cut_off_prevalence):
     return
 
 if __name__=='__main__':
-
     eICU_path = '/media/nasim/31c299f0-f952-4032-9bd8-001b141183e0/ML-Libraries-Graph-Database-Neo4j/PyG-Neo4j/app/eICU_data/'
     cut_off_prevalence = 0.001  # this would be 0.1%
     diagnoses_main(eICU_path, cut_off_prevalence)

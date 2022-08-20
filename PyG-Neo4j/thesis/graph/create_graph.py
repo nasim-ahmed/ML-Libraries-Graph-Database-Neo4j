@@ -5,17 +5,15 @@ import torch
 import argparse
 import json
 import os
-import torch
-#from GPUtil import showUtilization as gpu_usage
-#from numba import cuda
+from pathlib import Path
 
 
 def get_device_and_dtype():
     if torch.cuda.is_available():
-        device = torch.device('cpu')
+        device = torch.device('cuda')
     else:
         device = torch.device('cpu')
-    dtype = torch.cuda.FloatTensor if device.type == 'cuda' else torch.sparse.FloatTensor
+    dtype = torch.cuda.sparse.ByteTensor if device.type == 'cuda' else torch.sparse.ByteTensor
     return device, dtype
 
 
@@ -23,36 +21,8 @@ def get_freqs(train_diagnoses):
     return train_diagnoses.sum()
 
 
-def score_matrix(diagnoses, freq_adjustment=None, debug=True):
+def score_matrix(diagnoses, freq_adjustment=None, debug=False):
     print('==> Making score matrix')
-    #diagnoses = diagnoses.drop('patientunitstayid', axis=1)
-    diagnoses = np.array(diagnoses).astype(np.uint8)  # keep the memory requirement small!
-    device, dtype = get_device_and_dtype()
-    print(device)
-    diagnoses = torch.tensor(diagnoses,  device=device).type(dtype)
-    
-    if debug:
-        diagnoses = diagnoses[:10]
-    print('==> Finding common diagnoses')
-    if freq_adjustment is not None:
-        # take the inverse to reflect the 'rareness' instead of 'commonness'
-        freq_adjustment = 1 / freq_adjustment
-        # multiply by 1000 so I can still use integers. It is less precise but still works,
-        # the rare diagnoses are upweighted by about a factor of 4 compared to the commonest
-        # the addition of 1 is to ensure that all diagnoses shared are counted
-        freq_adjustment = torch.tensor(freq_adjustment * 1000, device=device).type(dtype)
-        
-        scores = torch.sparse.mm(diagnoses * freq_adjustment.unsqueeze(0), diagnoses.permute(1, 0))
-    else:
-        scores = torch.sparse.mm(diagnoses, diagnoses.permute(1, 0))  # only compute top part
-    
-    return scores
-
-
-'''Modified creation of score matrix'''
-def create_score_matrix(diagnoses, freq_adjustment=None, debug=False):
-    print('==> Making score matrix')
-    diagnoses_df = diagnoses
     diagnoses = np.array(diagnoses).astype(np.uint8)  # keep the memory requirement small!
     device, dtype = get_device_and_dtype()
     diagnoses = torch.tensor(diagnoses,  device=device).type(dtype)
@@ -60,46 +30,23 @@ def create_score_matrix(diagnoses, freq_adjustment=None, debug=False):
         diagnoses = diagnoses[:1000]
     print('==> Finding common diagnoses')
     if freq_adjustment is not None:
-         # take the inverse to reflect the 'rareness' instead of 'commonness'
+        # take the inverse to reflect the 'rareness' instead of 'commonness'
         freq_adjustment = 1 / freq_adjustment
         # multiply by 1000 so I can still use integers. It is less precise but still works :)
         # the rare diagnoses are upweighted by about a factor of 4 compared to the commonest
         # the addition of 1 is to ensure that all diagnoses shared are counted
         freq_adjustment = torch.tensor(freq_adjustment * 1000, device=device).type(dtype) + 1
-        #scores = torch.empty(diagnoses.shape[0], diagnoses.shape[0]).type(torch.cuda.sparse.FloatTensor)
-        
-        test_file = open('{}scores{}.out'.format(graph_dir, adjust), 'ab')
-        #test_file = open('{}scores{}.txt'.format(graph_dir, adjust), 'a')
+        scores = torch.sparse.mm(diagnoses * freq_adjustment.unsqueeze(0), diagnoses.permute(1, 0))
+    else:
+        scores = torch.sparse.mm(diagnoses, diagnoses.permute(1, 0))  # only compute top part
+    return scores
 
 
-        for indx, row in diagnoses_df.iterrows():
-            each_patient = row.values.reshape(-1, diagnoses.shape[1])
-            e_p_tensor = torch.tensor(each_patient).type(dtype)
-            each_output = torch.sparse.mm(e_p_tensor * freq_adjustment.unsqueeze(0), diagnoses.permute(1, 0))
-
-            np.savetxt(test_file, each_output.cpu().numpy())
-            # scores[indx] = each_output
-
-        test_file.close()
-
-    else: 
-        scores = torch.empty(diagnoses.shape[0], diagnoses.shape[0]).type(torch.cuda.sparse.FloatTensor)
-
-        for indx, row in diagnoses.iterrows():
-            each_patient = row.values.reshape(-1, 3)
-            e_p_tensor = torch.tensor(each_patient).type(torch.cuda.sparse.FloatTensor)
-            each_output = torch.sparse.mm(e_p_tensor, diagnoses.permute(1, 0))
-            scores[indx] = each_output
-
-    
-def make_graph_penalise(diagnoses, scores, batch_size=2, debug=True, k=3, mode='k_closest', save_edge_values=True):
+def make_graph_penalise(diagnoses, scores, batch_size=1000, debug=True, k=3, mode='k_closest', save_edge_values=True):
     print('==> Getting edges')
     if debug:
-        diagnoses = diagnoses.reset_index(drop=True)
-        diagnoses = diagnoses[:10]
+        diagnoses = diagnoses[:1000]
     no_pts = len(diagnoses)
-    print(no_pts)
-    #diagnoses = diagnoses.drop('patientunitstayid', axis=1)
     diags_per_pt = diagnoses.sum(axis=1)
     diags_per_pt = torch.tensor(diags_per_pt.values).type(torch.ShortTensor)
     del diagnoses
@@ -168,9 +115,7 @@ def batch(iterable, n=1):
 
 
 def make_graph(scores, threshold=True, k_closest=False, k=3):
-    scores = scores.cpu()
     print('==> Getting edges')
-    print(scores.shape)
     no_pts = len(scores)
     if k_closest:
         k_ = k
@@ -196,45 +141,55 @@ def make_graph(scores, threshold=True, k_closest=False, k=3):
             batch[batch < threshold_value] = 0
         edges = edges + sparse.lil_matrix(scores_lower)
         del scores_lower
-    print(edges)
     v, u, _ = sparse.find(edges)
     return u, v, k
 
+def create_diagnoses_dict(diagnoses):
+    numbers_list = list(range(0, len(diagnoses)))
+    uniqueid_dict = pd.Series(diagnoses.index.values, index=numbers_list).to_dict()
+    return uniqueid_dict
 
 
-def split_dataframe(df, freq_adjustment, chunk_size = 10):
-    df_split = np.array_split(df, chunk_size)
-    torch.cuda.empty_cache()
+def create_edges_nodes(k=3):
+    source_file = Path('{}{}_u_k={}{}.txt'.format(graph_dir, args.mode, k, adjust))
+    dest_file = Path('{}{}_v_k={}{}.txt'.format(graph_dir, args.mode, k, adjust))
+    weight_file = Path('{}{}_scores_k={}{}.txt'.format(graph_dir, args.mode, k, adjust))
 
-    scores = []
-    for chunk in df_split: 
-        score = score_matrix(chunk, freq_adjustment=freq_adjustment)
-        print(score.shape)
-        scores.append(score)
-        break
-        
-    return scores
-    
+    if source_file.is_file and dest_file.is_file:
+        #source file exists
+        sf = open(source_file, "r")
+        #destination file exists
+        df = open(dest_file, "r")
+        #weight file exists
+        wf = open(weight_file, "r")
+
+        source_list = [uniqueid_dict[int(x.strip('\n'))] for x in sf]
+        dest_list = [uniqueid_dict[int(y.strip('\n'))] for y in df]
+        weight_list = [int(w.strip('\n')) for w in wf]
+        df = pd.DataFrame(list(zip(source_list, dest_list, weight_list)), columns=['source', 'destination', 'weight'])
+        df.to_csv('{}nodes_edges_k={}{}.csv'.format(graph_dir, k, adjust))
+
 
 
 if __name__ == '__main__':
+
     parser = argparse.ArgumentParser()
     parser.add_argument('--k', type=int, default=3)
     parser.add_argument('--mode', type=str, default='k_closest', help='k_closest or threshold')
-    parser.add_argument('--freq_adjust', action='store_true', default='True')
-    parser.add_argument('--penalise_non_shared', action='store_true',  default='True')
+    parser.add_argument('--freq_adjust', action='store_true')
+    parser.add_argument('--penalise_non_shared', action='store_true', default=True)
     args = parser.parse_args()
 
     print(args)
+    eICU_path = '/media/nasim/31c299f0-f952-4032-9bd8-001b141183e0/ML-Libraries-Graph-Database-Neo4j/PyG-Neo4j/app/eICU_data/'
+    graph_dir = '/media/nasim/31c299f0-f952-4032-9bd8-001b141183e0/ML-Libraries-Graph-Database-Neo4j/PyG-Neo4j/app/graphs/'
+
 
     # with open('paths.json', 'r') as f:
     #     eICU_path = json.load(f)["eICU_path"]
-
+       
     # with open('paths.json', 'r') as f:
     #     graph_dir = json.load(f)["graph_dir"]
-
-    eICU_path = "/media/nasim/31c299f0-f952-4032-9bd8-001b141183e0/ML-Libraries-Graph-Database-Neo4j/PyG-Neo4j/app/eICU_data/"
-    graph_dir = "/media/nasim/31c299f0-f952-4032-9bd8-001b141183e0/ML-Libraries-Graph-Database-Neo4j/PyG-Neo4j/app/graphs/"
 
     device, dtype = get_device_and_dtype()
     adjust = '_adjusted' if args.freq_adjust else ''
@@ -242,44 +197,47 @@ if __name__ == '__main__':
     if not os.path.exists(graph_dir):  # make sure the graphs folder exists
         os.makedirs(graph_dir)
 
-    # get score matrix
     try:
         scores = torch.load('{}scores{}.pt'.format(graph_dir, adjust))
-        print(scores)
         print('==> Loaded existing scores matrix')
     except FileNotFoundError:
-        train_diagnoses = pd.read_csv('{}train/diagnoses.csv'.format(eICU_path), index_col='patient')
-        val_diagnoses = pd.read_csv('{}val/diagnoses.csv'.format(eICU_path), index_col='patient')
-        test_diagnoses = pd.read_csv('{}test/diagnoses.csv'.format(eICU_path), index_col='patient')
+        train_diagnoses = pd.read_csv('{}train/diagnoses.csv'.format(eICU_path), index_col='uniquepid')
+        val_diagnoses = pd.read_csv('{}val/diagnoses.csv'.format(eICU_path), index_col='uniquepid')
+        test_diagnoses = pd.read_csv('{}test/diagnoses.csv'.format(eICU_path), index_col='uniquepid')
+        train_diagnoses = train_diagnoses.drop(columns=['Unnamed: 0', 'patientunitstayid'])
+        test_diagnoses = test_diagnoses.drop(columns=['Unnamed: 0', 'patientunitstayid'])
+        val_diagnoses = val_diagnoses.drop(columns=['Unnamed: 0', 'patientunitstayid'])
+
         all_diagnoses = pd.concat([train_diagnoses, val_diagnoses, test_diagnoses], sort=False)
-        patients_arr = all_diagnoses['patientunitstayid']
-        all_diagnoses = all_diagnoses.drop('patientunitstayid',axis=1)
+        
         if args.freq_adjust:
-            freq_adjustment = get_freqs(all_diagnoses)
+            freq_adjustment = get_freqs(train_diagnoses)
         else:
             freq_adjustment = None
         del train_diagnoses, val_diagnoses, test_diagnoses
         scores = score_matrix(all_diagnoses, freq_adjustment=freq_adjustment)
-        torch.save(patients_arr, '{}patientsList.pt'.format(graph_dir))
-        torch.save(scores, '{}scores{}.pt'.format(graph_dir, adjust))
         del all_diagnoses
+        torch.save(scores, '{}scores{}.pt'.format(graph_dir, adjust))
 
-    #create_score_matrix(all_diagnoses, freq_adjustment=freq_adjustment, debug=True)
 
-    # torch.cuda.empty_cache()
-    # scores = score_matrix(all_diagnoses, freq_adjustment=freq_adjustment, debug=True)
-    # del all_diagnoses
-    # torch.save(scores, '{}scores{}.pt'.format(graph_dir, adjust))
-
-    #make graph
+    # make graph
     if args.penalise_non_shared:
         adjust = '_adjusted_ns'
-        train_diagnoses = pd.read_csv('{}train/diagnoses.csv'.format(eICU_path), index_col='patient')
-        val_diagnoses = pd.read_csv('{}val/diagnoses.csv'.format(eICU_path), index_col='patient')
-        test_diagnoses = pd.read_csv('{}test/diagnoses.csv'.format(eICU_path), index_col='patient')
+        train_diagnoses = pd.read_csv('{}train/diagnoses.csv'.format(eICU_path), index_col='uniquepid')
+        val_diagnoses = pd.read_csv('{}val/diagnoses.csv'.format(eICU_path), index_col='uniquepid')
+        test_diagnoses = pd.read_csv('{}test/diagnoses.csv'.format(eICU_path), index_col='uniquepid')
+
+        # Drop Unnamed:0 column & patientunitstayid
+        train_diagnoses = train_diagnoses.drop(columns=['Unnamed: 0', 'patientunitstayid'])
+        test_diagnoses = test_diagnoses.drop(columns=['Unnamed: 0', 'patientunitstayid'])
+        val_diagnoses = val_diagnoses.drop(columns=['Unnamed: 0', 'patientunitstayid'])
+        
         all_diagnoses = pd.concat([train_diagnoses, val_diagnoses, test_diagnoses], sort=False)
+        
+        uniqueid_dict = create_diagnoses_dict(all_diagnoses)
+
         del train_diagnoses, val_diagnoses, test_diagnoses
-        u, v, vals, k = make_graph_penalise(all_diagnoses, scores, debug=True, k=args.k)
+        u, v, vals, k = make_graph_penalise(all_diagnoses, scores, k=args.k)
     else:
         if args.mode == 'threshold':
             u, v, k = make_graph(scores, threshold=True, k_closest=False, k=args.k)
@@ -288,3 +246,6 @@ if __name__ == '__main__':
     np.savetxt('{}{}_u_k={}{}.txt'.format(graph_dir, args.mode, k, adjust), u.astype(int), fmt='%i')
     np.savetxt('{}{}_v_k={}{}.txt'.format(graph_dir, args.mode, k, adjust), v.astype(int), fmt='%i')
     np.savetxt('{}{}_scores_k={}{}.txt'.format(graph_dir, args.mode, k, adjust), vals.astype(int), fmt='%i')
+
+    create_edges_nodes()
+            
