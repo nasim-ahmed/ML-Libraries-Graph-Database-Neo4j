@@ -13,7 +13,7 @@ def get_device_and_dtype():
         device = torch.device('cuda')
     else:
         device = torch.device('cpu')
-    dtype = torch.cuda.sparse.ByteTensor if device.type == 'cuda' else torch.sparse.ByteTensor
+    dtype = torch.cuda.sparse.FloatTensor if device.type == 'cuda' else torch.sparse.FloatTensor
     return device, dtype
 
 
@@ -21,7 +21,7 @@ def get_freqs(train_diagnoses):
     return train_diagnoses.sum()
 
 
-def score_matrix(diagnoses, freq_adjustment=None, debug=False):
+def score_matrix(diagnoses, freq_adjustment=None, debug=True):
     print('==> Making score matrix')
     diagnoses = np.array(diagnoses).astype(np.uint8)  # keep the memory requirement small!
     device, dtype = get_device_and_dtype()
@@ -37,8 +37,10 @@ def score_matrix(diagnoses, freq_adjustment=None, debug=False):
         # the addition of 1 is to ensure that all diagnoses shared are counted
         freq_adjustment = torch.tensor(freq_adjustment * 1000, device=device).type(dtype) + 1
         scores = torch.sparse.mm(diagnoses * freq_adjustment.unsqueeze(0), diagnoses.permute(1, 0))
+        scores = scores.byte()
     else:
         scores = torch.sparse.mm(diagnoses, diagnoses.permute(1, 0))  # only compute top part
+        scores = scores.byte()
     return scores
 
 
@@ -176,7 +178,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--k', type=int, default=3)
     parser.add_argument('--mode', type=str, default='k_closest', help='k_closest or threshold')
-    parser.add_argument('--freq_adjust', action='store_true')
+    parser.add_argument('--freq_adjust', action='store_true', default=True)
     parser.add_argument('--penalise_non_shared', action='store_true', default=True)
     args = parser.parse_args()
 
@@ -221,31 +223,31 @@ if __name__ == '__main__':
 
 
     # make graph
-    if args.penalise_non_shared:
-        adjust = '_adjusted_ns'
-        train_diagnoses = pd.read_csv('{}train/diagnoses.csv'.format(eICU_path), index_col='uniquepid')
-        val_diagnoses = pd.read_csv('{}val/diagnoses.csv'.format(eICU_path), index_col='uniquepid')
-        test_diagnoses = pd.read_csv('{}test/diagnoses.csv'.format(eICU_path), index_col='uniquepid')
+    # if args.penalise_non_shared:
+    #     adjust = '_adjusted_ns'
+    #     train_diagnoses = pd.read_csv('{}train/diagnoses.csv'.format(eICU_path), index_col='uniquepid')
+    #     val_diagnoses = pd.read_csv('{}val/diagnoses.csv'.format(eICU_path), index_col='uniquepid')
+    #     test_diagnoses = pd.read_csv('{}test/diagnoses.csv'.format(eICU_path), index_col='uniquepid')
 
-        # Drop Unnamed:0 column & patientunitstayid
-        train_diagnoses = train_diagnoses.drop(columns=['Unnamed: 0', 'patientunitstayid'])
-        test_diagnoses = test_diagnoses.drop(columns=['Unnamed: 0', 'patientunitstayid'])
-        val_diagnoses = val_diagnoses.drop(columns=['Unnamed: 0', 'patientunitstayid'])
+    #     # Drop Unnamed:0 column & patientunitstayid
+    #     train_diagnoses = train_diagnoses.drop(columns=['Unnamed: 0', 'patientunitstayid'])
+    #     test_diagnoses = test_diagnoses.drop(columns=['Unnamed: 0', 'patientunitstayid'])
+    #     val_diagnoses = val_diagnoses.drop(columns=['Unnamed: 0', 'patientunitstayid'])
         
-        all_diagnoses = pd.concat([train_diagnoses, val_diagnoses, test_diagnoses], sort=False)
+    #     all_diagnoses = pd.concat([train_diagnoses, val_diagnoses, test_diagnoses], sort=False)
         
-        uniqueid_dict = create_diagnoses_dict(all_diagnoses)
+    #     uniqueid_dict = create_diagnoses_dict(all_diagnoses)
 
-        del train_diagnoses, val_diagnoses, test_diagnoses
-        u, v, vals, k = make_graph_penalise(all_diagnoses, scores, k=args.k)
-    else:
-        if args.mode == 'threshold':
-            u, v, k = make_graph(scores, threshold=True, k_closest=False, k=args.k)
-        else:
-            u, v, k = make_graph(scores, threshold=False, k_closest=True, k=args.k)
-    np.savetxt('{}{}_u_k={}{}.txt'.format(graph_dir, args.mode, k, adjust), u.astype(int), fmt='%i')
-    np.savetxt('{}{}_v_k={}{}.txt'.format(graph_dir, args.mode, k, adjust), v.astype(int), fmt='%i')
-    np.savetxt('{}{}_scores_k={}{}.txt'.format(graph_dir, args.mode, k, adjust), vals.astype(int), fmt='%i')
+    #     del train_diagnoses, val_diagnoses, test_diagnoses
+    #     u, v, vals, k = make_graph_penalise(all_diagnoses, scores, k=args.k)
+    # else:
+    #     if args.mode == 'threshold':
+    #         u, v, k = make_graph(scores, threshold=True, k_closest=False, k=args.k)
+    #     else:
+    #         u, v, k = make_graph(scores, threshold=False, k_closest=True, k=args.k)
+    # np.savetxt('{}{}_u_k={}{}.txt'.format(graph_dir, args.mode, k, adjust), u.astype(int), fmt='%i')
+    # np.savetxt('{}{}_v_k={}{}.txt'.format(graph_dir, args.mode, k, adjust), v.astype(int), fmt='%i')
+    # np.savetxt('{}{}_scores_k={}{}.txt'.format(graph_dir, args.mode, k, adjust), vals.astype(int), fmt='%i')
 
-    create_edges_nodes()
+    # create_edges_nodes()
             
