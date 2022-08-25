@@ -123,6 +123,21 @@ class GraphFetcher(object):
         commonresp_df = connection.query(query, {"col_one_list": col_one_list})
         commonresp_df.to_csv (r'{}commonresp.csv'.format(self.eICU_path), index = False, header=True)
 
+    def timeseriesresp(self, connection):
+        labels_df = pd.read_csv('{}labels.csv'.format(self.eICU_path))
+        patientunitstayid_list = labels_df['patientunitstayid'].tolist()
+        commonresp_df = pd.read_csv('{}commonresp.csv'.format(self.eICU_path))
+        commonresp_list = commonresp_df['respchartvaluelabel'].tolist()
+        
+        query = '''
+         MATCH (p:patientunitstay) - [r:HAS_RESPIRATORY_CHARTING] -> (rc:respiratorycharting)
+         WHERE rc.patientunitstayid IN $patientunitstayid_list AND rc.respchartvaluelabel IN $commonresp_list AND rc.respchartoffset >= -1440 AND rc.respchartoffset <= 1440
+         RETURN p.uniquepid AS uniquepid, rc.patientunitstayid AS patientunitstayid, rc.respchartoffset AS respchartoffset, rc.respchartvaluelabel AS respchartvaluelabel, rc.respchartvalue AS respchartvalue
+        '''
+
+        timeseriesresp_df = connection.query(query, {"patientunitstayid_list": patientunitstayid_list, "commonresp_list": commonresp_list})
+        timeseriesresp_df.to_csv (r'{}timeseriesresp.csv'.format(self.eICU_path), index = False, header=True)
+
 def main():
     #for debugging
     eICU_path = "/media/nasim/31c299f0-f952-4032-9bd8-001b141183e0/ML-Libraries-Graph-Database-Neo4j/PyG-Neo4j/app/eICU_data/"
@@ -143,7 +158,8 @@ def main():
     #graphFetcher.flat_features(connection)
     #graphFetcher.commonLabs(connection)
     #graphFetcher.timeserieslab(connection)
-    graphFetcher.commonresp(connection)
+    #graphFetcher.commonresp(connection)
+    graphFetcher.timeseriesresp(connection)
 
 
 if __name__ == "__main__":
