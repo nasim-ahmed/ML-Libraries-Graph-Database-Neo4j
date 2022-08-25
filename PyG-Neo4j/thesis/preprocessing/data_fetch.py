@@ -89,16 +89,33 @@ class GraphFetcher(object):
 
         commonlabs_df = connection.query(query, {"col_one_list": col_one_list})
         commonlabs_df.to_csv (r'{}commonlabs.csv'.format(self.eICU_path), index = False, header=True)
+
+    def timeserieslab(self, connection):
+        labels_df = pd.read_csv('{}labels.csv'.format(self.eICU_path))
+        patientunitstayid_list = labels_df['patientunitstayid'].tolist()
+        commonlabs_df = pd.read_csv('{}commonlabs.csv'.format(self.eICU_path))
+        labname_list = commonlabs_df['labname'].tolist()
         
+        query = '''
+         MATCH (p:patientunitstay) - [r:HAS_LAB] -> (l:lab)
+         WHERE r.patientunitstayid IN $patientunitstayid_list AND l.labname IN $labname_list AND r.labresultoffset >= -1440 AND r.labresultoffset <= 1440
+         RETURN p.uniquepid AS uniquepid, p.patientunitstayid AS patientunitstayid, r.labresultoffset AS labresultoffset, l.labname AS labname, r.labresult AS labresult
+        '''
+
+        timeserieslab_df = connection.query(query, {"patientunitstayid_list": patientunitstayid_list, "labname_list": labname_list})
+        #Replace not available values with 0.0
+        timeserieslab_df["labresult"].replace({"not available": 0.0}, inplace=True)
+        timeserieslab_df.to_csv (r'{}timeserieslab.csv'.format(self.eICU_path), index = False, header=True)
+
 
 def main():
-    #eICU_path = "/media/nasim/31c299f0-f952-4032-9bd8-001b141183e0/ML-Libraries-Graph-Database-Neo4j/PyG-Neo4j/app/eICU_data/"
-    #configure = '/media/nasim/31c299f0-f952-4032-9bd8-001b141183e0/ML-Libraries-Graph-Database-Neo4j/PyG-Neo4j/thesis/preprocessing/config.yaml'
+    #for debugging
+    eICU_path = "/media/nasim/31c299f0-f952-4032-9bd8-001b141183e0/ML-Libraries-Graph-Database-Neo4j/PyG-Neo4j/app/eICU_data/"
+    configure = '/media/nasim/31c299f0-f952-4032-9bd8-001b141183e0/ML-Libraries-Graph-Database-Neo4j/PyG-Neo4j/thesis/preprocessing/config.yaml'
 
-    with open('paths.json', 'r') as f:
-        eICU_path = json.load(f)["eICU_path"]
-
-    configure = 'config.yaml'
+    # with open('paths.json', 'r') as f:
+    #     eICU_path = json.load(f)["eICU_path"]
+    # configure = 'config.yaml'
    
     graphFetcher = GraphFetcher(configure, eICU_path)
     graphFetcher.load_config()
@@ -109,7 +126,8 @@ def main():
     #graphFetcher.fetch_labels(connection)
     #graphFetcher.fetch_diagnosis(connection)
     #graphFetcher.flat_features(connection)
-    graphFetcher.commonLabs(connection)
+    #graphFetcher.commonLabs(connection)
+    graphFetcher.timeserieslab(connection)
 
 
 if __name__ == "__main__":
