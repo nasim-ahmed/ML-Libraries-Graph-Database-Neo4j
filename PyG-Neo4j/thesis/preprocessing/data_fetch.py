@@ -79,25 +79,27 @@ class GraphFetcher(object):
         col_one_list = df['patientunitstayid'].tolist()
 
         query = '''
-        MATCH (p:patientunitstay) - [r:HAS_LAB] -> (l:lab)
-        WHERE r.labresultoffset >= -1440 AND r.labresultoffset <= 1440
-        WITH l.labname AS labname, count(r) AS count, r
-        WHERE p.patientunitstayid IN $col_one_list
-        RETURN labname, count
-        ORDER BY count DESC;
+         MATCH (p:patientunitstay) - [r:HAS_LAB] -> (l:lab)
+         WHERE r.labresultoffset >= -1440 AND r.labresultoffset <= 1440 AND p.patientunitstayid IN $col_one_list 
+         WITH l.labname AS labname, count(distinct r.patientunitstayid) AS count
+         WHERE count > 0.25 * 89143
+         RETURN labname, count
+         ORDER BY count DESC;
         '''
 
         commonlabs_df = connection.query(query, {"col_one_list": col_one_list})
-        print(commonlabs_df)
-
-
-   
+        commonlabs_df.to_csv (r'{}commonlabs.csv'.format(self.eICU_path), index = False, header=True)
+        
 
 def main():
+    #eICU_path = "/media/nasim/31c299f0-f952-4032-9bd8-001b141183e0/ML-Libraries-Graph-Database-Neo4j/PyG-Neo4j/app/eICU_data/"
+    #configure = '/media/nasim/31c299f0-f952-4032-9bd8-001b141183e0/ML-Libraries-Graph-Database-Neo4j/PyG-Neo4j/thesis/preprocessing/config.yaml'
+
     with open('paths.json', 'r') as f:
         eICU_path = json.load(f)["eICU_path"]
 
     configure = 'config.yaml'
+   
     graphFetcher = GraphFetcher(configure, eICU_path)
     graphFetcher.load_config()
     connection = Neo4jConnection(config)
