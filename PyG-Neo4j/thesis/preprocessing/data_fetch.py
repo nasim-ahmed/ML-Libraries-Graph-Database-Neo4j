@@ -107,6 +107,21 @@ class GraphFetcher(object):
         timeserieslab_df["labresult"].replace({"not available": 0.0}, inplace=True)
         timeserieslab_df.to_csv (r'{}timeserieslab.csv'.format(self.eICU_path), index = False, header=True)
 
+    def commonresp(self, connection):
+        df = pd.read_csv('{}labels.csv'.format(self.eICU_path))
+        col_one_list = df['patientunitstayid'].tolist()
+
+        query = '''
+         MATCH (p:patientunitstay) - [r:HAS_RESPIRATORY_CHARTING] -> (rc:respiratorycharting)
+         WHERE rc.respchartoffset >= -1440 AND rc.respchartoffset <= 1440 AND p.patientunitstayid IN $col_one_list 
+         WITH rc.respchartvaluelabel AS respchartvaluelabel, count(distinct rc.patientunitstayid) AS count
+         WHERE count > 0.13 * 89143
+         RETURN respchartvaluelabel, count
+         ORDER BY count DESC;
+        '''
+
+        commonresp_df = connection.query(query, {"col_one_list": col_one_list})
+        commonresp_df.to_csv (r'{}commonresp.csv'.format(self.eICU_path), index = False, header=True)
 
 def main():
     #for debugging
@@ -127,7 +142,8 @@ def main():
     #graphFetcher.fetch_diagnosis(connection)
     #graphFetcher.flat_features(connection)
     #graphFetcher.commonLabs(connection)
-    graphFetcher.timeserieslab(connection)
+    #graphFetcher.timeserieslab(connection)
+    graphFetcher.commonresp(connection)
 
 
 if __name__ == "__main__":
