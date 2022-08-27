@@ -162,6 +162,29 @@ class GraphFetcher(object):
             print(largeDF)
         largeDF.to_csv (r'{}timeseriesperiodic.csv'.format(self.eICU_path), index = False, header=True)
 
+    def timeseriesaperiodic(self, connection):
+        df = pd.read_csv('{}labels.csv'.format(self.eICU_path))
+        col_list = df['patientunitstayid'].tolist()
+
+        query = '''
+         MATCH (p:patientunitstay) - [v:HAS_VITALAPERIODIC] -> (va:vitalaperiodic)
+         WHERE va.observationoffset >= -1440 AND va.observationoffset <= 1440 AND va.patientunitstayid IN $col_one_list
+         RETURN p.uniquepid AS uniquepid, va.patientunitstayid AS patientunitstayid, va.observationoffset AS observationoffset, va.noninvasivesystolic AS noninvasivesystolic, va.noninvasivediastolic AS noninvasivediastolic, va.noninvasivemean AS noninvasivemean
+         ORDER BY patientunitstayid, observationoffset;
+        '''
+
+        batch_len = 5000
+
+        largeDF = pd.DataFrame()
+
+        for batch_start in range(0, len(df), batch_len):
+            batch_end = batch_start + batch_len
+            records = col_list[batch_start:batch_end]
+            timeseriesaperiodic_df = connection.query(query, {"col_one_list": records})
+            largeDF = pd.concat([largeDF, timeseriesaperiodic_df])
+            print(largeDF)
+        largeDF.to_csv (r'{}timeseriesaperiodic.csv'.format(self.eICU_path), index = False, header=True)
+
 def main():
     #for debugging
     eICU_path = "/media/nasim/31c299f0-f952-4032-9bd8-001b141183e0/ML-Libraries-Graph-Database-Neo4j/PyG-Neo4j/app/eICU_data/"
@@ -185,6 +208,7 @@ def main():
     #graphFetcher.commonresp(connection)
     #graphFetcher.timeseriesresp(connection)
     #graphFetcher.timeseriesperiodic(connection)
+    #graphFetcher.timeseriesaperiodic(connection)
 
 
 if __name__ == "__main__":
