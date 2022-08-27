@@ -138,6 +138,30 @@ class GraphFetcher(object):
         timeseriesresp_df = connection.query(query, {"patientunitstayid_list": patientunitstayid_list, "commonresp_list": commonresp_list})
         timeseriesresp_df.to_csv (r'{}timeseriesresp.csv'.format(self.eICU_path), index = False, header=True)
 
+    def timeseriesperiodic(self, connection):
+        df = pd.read_csv('{}labels.csv'.format(self.eICU_path))
+        col_list = df['patientunitstayid'].tolist()
+
+        query = '''
+         MATCH (p:patientunitstay) - [v:HAS_VITALPERIODIC] -> (vp:vitalperiodic)
+         WHERE vp.observationoffset >= -1440 AND vp.observationoffset <= 1440 AND vp.patientunitstayid IN $col_one_list
+         RETURN p.uniquepid AS uniquepid, vp.patientunitstayid AS patientunitstayid, vp.observationoffset as observationoffset, vp.temperature AS temperature, vp.sao2 AS sao2, vp.heartrate AS heartrate, vp.respiration AS respiration, vp.cvp AS cvp,
+    vp.systemicsystolic AS systemicsystolic, vp.systemicdiastolic AS systemicdiastolic, vp.systemicmean AS systemicmean, vp.st1 AS st1, vp.st2 AS st2, vp.st3 AS st3
+         ORDER BY patientunitstayid, observationoffset;
+        '''
+
+        batch_len = 5000
+
+        largeDF = pd.DataFrame()
+
+        for batch_start in range(0, len(df), batch_len):
+            batch_end = batch_start + batch_len
+            records = col_list[batch_start:batch_end]
+            timeseriesperiodic_df = connection.query(query, {"col_one_list": records})
+            largeDF = pd.concat([largeDF,timeseriesperiodic_df])
+            print(largeDF)
+        largeDF.to_csv (r'{}timeseriesperiodic.csv'.format(self.eICU_path), index = False, header=True)
+
 def main():
     #for debugging
     eICU_path = "/media/nasim/31c299f0-f952-4032-9bd8-001b141183e0/ML-Libraries-Graph-Database-Neo4j/PyG-Neo4j/app/eICU_data/"
@@ -159,7 +183,8 @@ def main():
     #graphFetcher.commonLabs(connection)
     #graphFetcher.timeserieslab(connection)
     #graphFetcher.commonresp(connection)
-    graphFetcher.timeseriesresp(connection)
+    #graphFetcher.timeseriesresp(connection)
+    #graphFetcher.timeseriesperiodic(connection)
 
 
 if __name__ == "__main__":
