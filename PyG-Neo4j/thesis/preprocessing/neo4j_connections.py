@@ -36,6 +36,7 @@ class Neo4jConnection(object):
             session = self.__driver.session(database=db) if db is not None else self.__driver.session() 
             #response = list(session.run(query))
             result = session.run(query, params)
+            
             dataframe = pd.DataFrame([r.values() for r in result], columns=result.keys())
 
         except Exception as e:

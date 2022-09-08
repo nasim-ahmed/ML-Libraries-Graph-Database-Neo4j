@@ -202,6 +202,12 @@ def diagnoses_main(eICU_path, cut_off_prevalence):
     
     sparse_df.insert(0, 'uniquepid', new_list)
 
+    #Rename and remove
+    sparse_df.rename(columns={'uniquepid': 'patient'}, inplace=True)
+    sparse_df.drop('patientunitstayid', axis=1, inplace=True)
+    sparse_df.set_index('patient', inplace=True)
+
+
     print('==> Saving finalised preprocessed diagnoses...')
     sparse_df.to_csv(eICU_path + 'preprocessed_diagnoses.csv')
 

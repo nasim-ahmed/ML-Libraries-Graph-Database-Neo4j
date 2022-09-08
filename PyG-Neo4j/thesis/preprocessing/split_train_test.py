@@ -17,29 +17,30 @@ def shuffle_stays(stays, seed=9):
     return shuffle(stays, random_state=seed)
 
 def process_table(table_name, table, stays, folder_path):
-    # table = table.reindex(stays)
-    table = table.loc[stays].copy()
+    #table = table.reindex(columns = stays)
+    #table = table.loc[stays].copy()
+    table = table.loc[table.index.intersection(stays)]
     table.to_csv('{}/{}.csv'.format(folder_path, table_name))
     return table
 
 
 def split_train_test(eICU_path, is_test=True, seed=9, cleanup=True):
     labels = pd.read_csv(eICU_path + 'preprocessed_labels.csv')
-    labels.set_index('uniquepid', inplace=True)
+    labels.set_index('patient', inplace=True)
 
     train, test = train_test_split(labels.index, test_size=0.15, random_state=seed)
     train, val = train_test_split(train, test_size=0.15/0.85, random_state=seed)
    
     print('==> Loading data for splitting...')
-    # if is_test:
-    #     timeseries = pd.read_csv(eICU_path + 'preprocessed_timeseries.csv', nrows=999999)
-    # else:
-    #     timeseries = pd.read_csv(eICU_path + 'preprocessed_timeseries.csv')
-    # timeseries.set_index('uniquepid', inplace=True)
+    if is_test:
+        timeseries = pd.read_csv(eICU_path + 'preprocessed_timeseries.csv', nrows=999999)
+    else:
+        timeseries = pd.read_csv(eICU_path + 'preprocessed_timeseries.csv')
+    timeseries.set_index('patient', inplace=True)
     diagnoses = pd.read_csv(eICU_path + 'preprocessed_diagnoses.csv')
-    diagnoses.set_index('uniquepid', inplace=True)
+    diagnoses.set_index('patient', inplace=True)
     flat_features = pd.read_csv(eICU_path + 'preprocessed_flat.csv')
-    flat_features.set_index('uniquepid', inplace=True)
+    flat_features.set_index('patient', inplace=True)
 
     # delete the source files, as they won't be needed anymore
     # if is_test is False and cleanup:
@@ -55,8 +56,8 @@ def split_train_test(eICU_path, is_test=True, seed=9, cleanup=True):
         folder_path = create_folder(eICU_path, partition_name)
         stays = shuffle_stays(stays, seed=9)
         with open(folder_path + '/stays.txt', 'w') as f:
-            for table_name, table in zip(['labels', 'flat', 'diagnoses'],
-                                         [labels, flat_features, diagnoses]):
+            for table_name, table in zip(['timeseries'],
+                                         [timeseries]):
                 table = process_table(table_name, table, stays, folder_path)
                 for stay in table.index:
                     f.write("%s\n" % stay)

@@ -3,7 +3,7 @@ import pandas as pd
 
 def preprocess_flat(flat):
     # make naming consistent with the other tables
-    flat.rename(columns={'patientunitstayid': 'patient'}, inplace=True)
+    flat.rename(columns={'uniquepid': 'patient'}, inplace=True)
     flat.set_index('patient', inplace=True)
 
     # admission diagnosis is dealt with in diagnoses.py not flat features
@@ -44,7 +44,7 @@ def preprocess_flat(flat):
 def preprocess_labels(labels):
 
     # make naming consistent with the other tables
-    labels.rename(columns={'patientunitstayid': 'patient'}, inplace=True)
+    labels.rename(columns={'uniquepid': 'patient'}, inplace=True)
     labels.set_index('patient', inplace=True)
 
     labels['actualhospitalmortality'].replace({'EXPIRED': 1, 'ALIVE': 0}, inplace=True)
@@ -58,7 +58,12 @@ def flat_and_labels_main(eICU_path):
     labels = preprocess_labels(labels)
 
     print('==> Saving finalised preprocessed labels and flat features...')
+    flat.drop('patientunitstayid', axis=1, inplace=True)
     flat.to_csv(eICU_path + 'preprocessed_flat.csv')
+    
+    labels.drop('patientunitstayid', axis=1, inplace=True)
+
+   
     labels.to_csv(eICU_path + 'preprocessed_labels.csv')
     return
 

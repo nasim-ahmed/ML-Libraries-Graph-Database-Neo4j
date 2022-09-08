@@ -7,7 +7,7 @@ import os
 def reconfigure_timeseries(timeseries, offset_column, feature_column=None, test=False):
     if test:
         timeseries = timeseries.iloc[0:5000]  # for testing purposes
-    timeseries.set_index(['patientunitstayid', pd.to_timedelta(timeseries[offset_column], unit='T')], inplace=True)
+    timeseries.set_index(['uniquepid', pd.to_timedelta(timeseries[offset_column], unit='T')], inplace=True)
     timeseries.drop(columns=offset_column, inplace=True)
     if feature_column is not None:
         timeseries = timeseries.pivot_table(columns=feature_column, index=timeseries.index)
@@ -94,6 +94,13 @@ def gen_timeseries_file(eICU_path, test=False):
     timeseries_periodic = pd.read_csv(eICU_path + 'timeseriesperiodic.csv')
     timeseries_aperiodic = pd.read_csv(eICU_path + 'timeseriesaperiodic.csv')
 
+    #Removing patientunitstayid column from the tables to keep uniquepid
+    timeseries_lab.drop('patientunitstayid', axis=1, inplace=True)
+    timeseries_resp.drop('patientunitstayid', axis=1, inplace=True)
+    timeseries_periodic.drop('patientunitstayid', axis=1, inplace=True)
+    timeseries_aperiodic.drop('patientunitstayid', axis=1, inplace=True)
+
+
     print('==> Reconfiguring lab timeseries...')
     timeseries_lab = reconfigure_timeseries(timeseries_lab,
                                             offset_column='labresultoffset',
@@ -146,11 +153,9 @@ def gen_timeseries_file(eICU_path, test=False):
         print('==> Processed ' + str(i) + ' patients...')
         i += 500
         header = False
-
     return
 
 def add_time_of_day(processed_timeseries, flat_features):
-
     print('==> Adding time of day features...')
     processed_timeseries = processed_timeseries.join(flat_features[['hour']], how='inner', on='patient')
     processed_timeseries['hour'] = processed_timeseries['time'] + processed_timeseries['hour']
@@ -159,12 +164,16 @@ def add_time_of_day(processed_timeseries, flat_features):
     return processed_timeseries
 
 def further_processing(eICU_path, test=False):
-
     processed_timeseries = pd.read_csv(eICU_path + 'preprocessed_timeseries.csv')
     processed_timeseries.rename(columns={'Unnamed: 1': 'time'}, inplace=True)
     processed_timeseries.set_index('patient', inplace=True)
     flat_features = pd.read_csv(eICU_path + 'flat_features.csv')
-    flat_features.rename(columns={'patientunitstayid': 'patient'}, inplace=True)
+    
+    #renamed 'hr' column to hour
+    flat_features.rename(columns={'hr': 'hour'}, inplace=True)
+    flat_features.drop('patientunitstayid', axis=1, inplace=True)
+    
+    flat_features.rename(columns={'uniquepid': 'patient'}, inplace=True)
     flat_features.set_index('patient', inplace=True)
 
     processed_timeseries = add_time_of_day(processed_timeseries, flat_features)
@@ -211,5 +220,5 @@ def timeseries_main(eICU_path, test=False):
 
 if __name__=='__main__':
     test = True
-    eICU_path = '/media/nasim/31c299f0-f952-4032-9bd8-001b141183e0/ML-Libraries-Graph-Database-Neo4j/PyG-Neo4j/app/eICU_data'
+    eICU_path = '/media/nasim/31c299f0-f952-4032-9bd8-001b141183e0/ML-Libraries-Graph-Database-Neo4j/PyG-Neo4j/app/eICU_data/'
     timeseries_main(eICU_path, test)

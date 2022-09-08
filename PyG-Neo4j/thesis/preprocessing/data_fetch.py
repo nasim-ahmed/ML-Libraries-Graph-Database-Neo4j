@@ -88,7 +88,8 @@ class GraphFetcher(object):
         '''
 
         commonlabs_df = connection.query(query, {"col_one_list": col_one_list})
-        commonlabs_df.to_csv (r'{}commonlabs.csv'.format(self.eICU_path), index = False, header=True)
+        print(commonlabs_df)
+        #commonlabs_df.to_csv (r'{}commonlabs.csv'.format(self.eICU_path), index = False, header=True)
 
     def timeserieslab(self, connection):
         labels_df = pd.read_csv('{}labels.csv'.format(self.eICU_path))
@@ -203,7 +204,7 @@ def main():
     #graphFetcher.fetch_labels(connection)
     #graphFetcher.fetch_diagnosis(connection)
     #graphFetcher.flat_features(connection)
-    #graphFetcher.commonLabs(connection)
+    graphFetcher.commonLabs(connection)
     #graphFetcher.timeserieslab(connection)
     #graphFetcher.commonresp(connection)
     #graphFetcher.timeseriesresp(connection)
